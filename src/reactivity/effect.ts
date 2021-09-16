@@ -1,6 +1,11 @@
+import { extend } from '../shared'
+
 let activeEffect
 class ReactiveEffect {
   private _fn: any
+  deps = []
+  active = true
+  onStop?: () => void
   constructor(fn, public scheduler?) {
     this._fn = fn
   }
@@ -9,6 +14,24 @@ class ReactiveEffect {
     activeEffect = this
     return this._fn()
   }
+
+  // 这里需要获取到收集的dep， 在track内作反向收集
+  stop() {
+    // 优化，当active存在时再调用清理的循环
+    if (this.active) {
+      cleanupEffect(this)
+      if (this.onStop) {
+        this.onStop()
+      }
+      this.active = false
+    }
+  }
+}
+
+function cleanupEffect(effect) {
+  effect.deps.forEach((dep: any) => {
+    dep.delete(effect)
+  })
 }
 
 let targetMap = new WeakMap()
@@ -28,9 +51,12 @@ export function track(target, key) {
   if (!dep) {
     depsMap.set(key, (dep = new Set()))
   }
-
+  // 如果没有触发effect，则不用执行后续的代码
+  if (!activeEffect) return
   // 将当前的更新方法传递到内里
   dep.add(activeEffect)
+  // 此时让 activeEffect 获取到收集的dep
+  activeEffect.deps.push(dep)
 }
 
 // 触发依赖
@@ -42,7 +68,7 @@ export function trigger(target, key) {
 
   // 此时直接执行将内部的方法全部运行
   for (const effect of dep) {
-    if (Reflect.has(effect, 'scheduler')) {
+    if (effect.scheduler) {
       effect.scheduler()
     } else {
       effect.run()
@@ -50,10 +76,20 @@ export function trigger(target, key) {
   }
 }
 
-export function effect(fn, option: any = {}) {
-  const _effect = new ReactiveEffect(fn, option.scheduler)
+export function effect(fn, options: any = {}) {
+  const _effect = new ReactiveEffect(fn, options.scheduler)
+  // 将传递进来的参数都添加到_effecr对象内
+  extend(_effect, options)
   _effect.run()
 
   // 解决run内部的this指向问题
-  return _effect.run.bind(_effect)
+  const runner: any = _effect.run.bind(_effect)
+
+  // 是的stop能找到当前的effect实例
+  runner.effect = _effect
+  return runner
+}
+
+export function stop(runner) {
+  runner.effect.stop()
 }

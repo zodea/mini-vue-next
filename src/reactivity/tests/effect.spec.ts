@@ -1,4 +1,4 @@
-import { effect } from '../effect'
+import { effect, stop } from '../effect'
 import { reactive } from '../reactive'
 
 describe('effect', () => {
@@ -58,5 +58,29 @@ describe('effect', () => {
     expect(dummy).toBe(1)
     run()
     expect(dummy).toBe(2)
+  })
+
+  it('stop', () => {
+    let dummy
+    const obj = reactive({ prop: 1 })
+    const runner = effect(() => {
+      dummy = obj.prop
+    })
+    obj.prop = 2
+    expect(dummy).toBe(2)
+    // 获取到当前的响应式方法，并对其触发暂停更新的操作
+    stop(runner)
+    obj.prop = 3
+    expect(dummy).toBe(2)
+
+    runner()
+    expect(dummy).toBe(3)
+  })
+
+  it('onStop', () => {
+    const onStop = jest.fn()
+    const runner = effect(() => {}, { onStop })
+    stop(runner)
+    expect(onStop).toBeCalledTimes(1)
   })
 })
