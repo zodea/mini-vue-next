@@ -1,4 +1,4 @@
-import { readonly } from '../reactive'
+import { isReadonly, readonly } from '../reactive'
 
 describe('readonly', () => {
   it('primary readonly', () => {
@@ -7,6 +7,8 @@ describe('readonly', () => {
 
     expect(wrapped).not.toBe(original)
     expect(wrapped.foo).toBe(1)
+    expect(isReadonly(original)).toBe(false)
+    expect(isReadonly(wrapped)).toBe(true)
   })
 
   it('warn when call set', () => {
