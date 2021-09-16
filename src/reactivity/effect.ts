@@ -1,7 +1,7 @@
 let activeEffect
 class ReactiveEffect {
   private _fn: any
-  constructor(fn) {
+  constructor(fn, public scheduler?) {
     this._fn = fn
   }
 
@@ -42,12 +42,16 @@ export function trigger(target, key) {
 
   // 此时直接执行将内部的方法全部运行
   for (const effect of dep) {
-    effect.run()
+    if (Reflect.has(effect, 'scheduler')) {
+      effect.scheduler()
+    } else {
+      effect.run()
+    }
   }
 }
 
-export function effect(fn) {
-  const _effect = new ReactiveEffect(fn)
+export function effect(fn, option: any = {}) {
+  const _effect = new ReactiveEffect(fn, option.scheduler)
   _effect.run()
 
   // 解决run内部的this指向问题
