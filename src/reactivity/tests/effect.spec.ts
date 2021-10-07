@@ -70,7 +70,13 @@ describe('effect', () => {
     expect(dummy).toBe(2)
     // 获取到当前的响应式方法，并对其触发暂停更新的操作
     stop(runner)
-    obj.prop = 3
+    // obj.prop = 3
+    // obj.prop = obj.prop + 1
+    // 此时会触发get合set操作，所以当stop清理的时候，要再get时做判断
+    // 判断当前是否需要做收集，此处的全局变量再哪做赋值呢
+    // 由于触发响应式对象赋值的函数是runner，而runner是在run的时候触发的
+    // 所以我们在run函数内处理该全局变量的逻辑
+    obj.prop++
     expect(dummy).toBe(2)
 
     runner()

@@ -1,6 +1,7 @@
 import { extend } from '../shared'
 
 let activeEffect
+let shouldTrack
 class ReactiveEffect {
   private _fn: any
   deps = []
@@ -11,8 +12,20 @@ class ReactiveEffect {
   }
 
   run() {
+    // 1. 此处收集依赖
+    // 通过 shouldTrack 作区分
+    if(!this.active) {
+      return this._fn()
+    }
+
+    shouldTrack = true;
     activeEffect = this
-    return this._fn()
+
+    const result = this._fn();
+    // reset
+    shouldTrack = false;
+
+    return result;
   }
 
   // 这里需要获取到收集的dep， 在track内作反向收集
@@ -32,12 +45,14 @@ function cleanupEffect(effect) {
   effect.deps.forEach((dep: any) => {
     dep.delete(effect)
   })
+  effect.deps.length = 0
 }
 
 let targetMap = new WeakMap()
 // 收集依赖，先获取当前目标是否已经有依赖更新函数，创建一个全局的目标字典
 // 获取effect内拿到的fn， 因此需要将fn提升到外部进行获取
 export function track(target, key) {
+  if(!isTracking()) return;
   // 先获取当前的目标是否存在在字典内
   let depsMap = targetMap.get(target)
   //  初始化
@@ -51,12 +66,17 @@ export function track(target, key) {
   if (!dep) {
     depsMap.set(key, (dep = new Set()))
   }
-  // 如果没有触发effect，则不用执行后续的代码
-  if (!activeEffect) return
+  if (dep.has(activeEffect)) return;
   // 将当前的更新方法传递到内里
   dep.add(activeEffect)
   // 此时让 activeEffect 获取到收集的dep
   activeEffect.deps.push(dep)
+}
+
+function isTracking() {
+  // 如果没有触发effect，则不用执行后续的代码
+  // 判断是否应当收集依赖
+  return activeEffect && shouldTrack
 }
 
 // 触发依赖
