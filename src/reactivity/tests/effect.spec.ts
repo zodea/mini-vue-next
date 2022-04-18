@@ -35,10 +35,10 @@ describe('effect', () => {
   })
 
   it('scheduler', () => {
-    // 通过给定effect 第二个参数 scheduler 一个fn
-    // 此时当effect在 初次执行时会触发一次fn
-    // 在响应式对象obj 触发setter时，不会触发fn，而是scheduler
-    // 当触发了runner时，才会去执行fn
+    // 通过给定effect 第一个参数 fn，第二个参数 名为scheduler的方法
+    // 此时当effect在第一次执行时会执行一次 fn
+    // 在响应式对象 执行setter时，不会执行fn，而是执行scheduler
+    // 当执行runner时，才会去执行fn，以为此时返回的是 fn
     let dummy
     let run
     const scheduler = jest.fn(() => {
@@ -85,7 +85,7 @@ describe('effect', () => {
 
   it('onStop', () => {
     const onStop = jest.fn()
-    const runner = effect(() => {}, { onStop })
+    const runner = effect(() => { }, { onStop })
     stop(runner)
     expect(onStop).toBeCalledTimes(1)
   })

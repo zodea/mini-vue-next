@@ -1,113 +1,106 @@
-import { extend } from '../shared'
+import { extend } from "../shared"
 
-let activeEffect
+const targetMap = new WeakMap()
+let activeEffect: any
 let shouldTrack
+
 class ReactiveEffect {
   private _fn: any
-  deps = []
+  deps: any[] = []
   active = true
   onStop?: () => void
-  constructor(fn, public scheduler?) {
+  public scheduler: Function | undefined
+  constructor(fn, scheduler?: Function) {
     this._fn = fn
+    this.scheduler = scheduler
   }
 
   run() {
-    // 1. 此处收集依赖
-    // 通过 shouldTrack 作区分
-    if(!this.active) {
+    // 当运行stop之后，就不会关心依赖了
+    // 所以直接返回响应函数即可
+    if (!this.active) {
       return this._fn()
     }
-
-    shouldTrack = true;
+    // 否则的话收集依赖
+    shouldTrack = true
     activeEffect = this
-
-    const result = this._fn();
-    // reset
-    shouldTrack = false;
-
-    return result;
+    const result = this._fn()
+    // 之后再将依赖收集关闭
+    // 后续多次调用stop也不会产生影响，在stop内操作也可以
+    shouldTrack = false
+    return result
   }
 
-  // 这里需要获取到收集的dep， 在track内作反向收集
   stop() {
-    // 优化，当active存在时再调用清理的循环
-    if (this.active) {
-      cleanupEffect(this)
-      if (this.onStop) {
-        this.onStop()
-      }
-      this.active = false
-    }
+    // 此处需要对deps进行解绑
+    // 在收集依赖时，将deps绑定在其自身即可
+    // 新增一个deps属性进行存储
+    this.active && cleanupEffect(this)
+    this.onStop?.()
+    this.active = false
   }
 }
 
-function cleanupEffect(effect) {
-  effect.deps.forEach((dep: any) => {
-    dep.delete(effect)
+function cleanupEffect(effect: ReactiveEffect) {
+  effect.deps.forEach(dep => {
+    if (dep) {
+      dep.delete(effect)
+    }
   })
   effect.deps.length = 0
 }
 
-let targetMap = new WeakMap()
-// 收集依赖，先获取当前目标是否已经有依赖更新函数，创建一个全局的目标字典
-// 获取effect内拿到的fn， 因此需要将fn提升到外部进行获取
+export function effect(fn, options: any = {}) {
+  // 获取一个方法，并且需要立即调用
+  // 抽离出来，放到一个单独的类中
+  const _effect = new ReactiveEffect(fn, options.scheduler)
+  extend(_effect, options)
+  _effect.run()
+
+  // 获取到的返回值为当前的run方法， 但是需要指定其this的指向
+  // 直接返回fn会导致无法收集到对应的依赖
+  const runner: any = _effect.run.bind(_effect)
+
+  // 给runner自身添加一个属性，用来记录当前的effect
+  runner.effect = _effect
+  return runner
+}
+
 export function track(target, key) {
-  if(!isTracking()) return;
-  // 先获取当前的目标是否存在在字典内
+  if (!isTracking()) return
+
   let depsMap = targetMap.get(target)
-  //  初始化
   if (!depsMap) {
-    targetMap.set(target, (depsMap = new Map()))
+    depsMap = new Map()
+    targetMap.set(target, depsMap)
+  }
+  let dep = depsMap.get(key)
+  if (!dep) {
+    dep = new Set()
+    depsMap.set(key, dep)
   }
 
-  // 此时再获取当前字典是否存在相关的key的方法
-  let dep = depsMap.get(key)
-  // 初始化
-  if (!dep) {
-    depsMap.set(key, (dep = new Set()))
-  }
-  if (dep.has(activeEffect)) return;
-  // 将当前的更新方法传递到内里
+  if (dep.has(activeEffect)) return
+
   dep.add(activeEffect)
-  // 此时让 activeEffect 获取到收集的dep
   activeEffect.deps.push(dep)
 }
 
 function isTracking() {
-  // 如果没有触发effect，则不用执行后续的代码
-  // 判断是否应当收集依赖
-  return activeEffect && shouldTrack
+  return shouldTrack && activeEffect !== undefined
 }
 
-// 触发依赖
 export function trigger(target, key) {
-  // 首先获取当前目标的依赖
   const depsMap = targetMap.get(target)
-  // 获取当前key的方法映射
   const dep = depsMap.get(key)
-
-  // 此时直接执行将内部的方法全部运行
   for (const effect of dep) {
+    // 当执行赋值操作时，会判断是否存在schedule进行执行
     if (effect.scheduler) {
       effect.scheduler()
     } else {
       effect.run()
     }
   }
-}
-
-export function effect(fn, options: any = {}) {
-  const _effect = new ReactiveEffect(fn, options.scheduler)
-  // 将传递进来的参数都添加到_effecr对象内
-  extend(_effect, options)
-  _effect.run()
-
-  // 解决run内部的this指向问题
-  const runner: any = _effect.run.bind(_effect)
-
-  // 是的stop能找到当前的effect实例
-  runner.effect = _effect
-  return runner
 }
 
 export function stop(runner) {
