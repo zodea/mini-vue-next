@@ -1,4 +1,4 @@
-import { mutabelHandler, readonlyHandler } from './baseHandlers'
+import { mutabelHandler, readonlyHandler, shallowReadonlyHandler } from './baseHandlers'
 
 // 枚举reactive上的一些标签
 export const enum ReactiveFlag {
@@ -13,6 +13,10 @@ export function reactive(raw) {
 // 拦截set的赋值操作，直接返回成功
 export function readonly(raw) {
   return createActiveObject(raw, readonlyHandler)
+}
+
+export function shallowReadonly(raw) {
+  return createActiveObject(raw, shallowReadonlyHandler)
 }
 
 export function isReactive(value) {

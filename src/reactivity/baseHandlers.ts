@@ -5,7 +5,8 @@ import { reactive, ReactiveFlag, readonly } from './reactive'
 const get = createGetter()
 const set = createSetter()
 const readonlyGet = createGetter(true)
-function createGetter(isReadonly = false) {
+const shallowReadonlyGet = createGetter(true, true)
+function createGetter(isReadonly = false, isShallow = false) {
   return function get(target, key) {
     if (key === ReactiveFlag.IS_REACTIVE) {
       return true
@@ -13,6 +14,7 @@ function createGetter(isReadonly = false) {
       return isReadonly
     }
     const res = Reflect.get(target, key)
+    if (isShallow) return res
     // 判断 res 是否是 object
     if (isObject(res)) {
       return isReadonly ? readonly(res) : reactive(res)
@@ -36,6 +38,13 @@ export const mutabelHandler = {
 }
 export const readonlyHandler = {
   get: readonlyGet,
+  set: (target, key) => {
+    console.warn(`key: ${key} 赋值失败，因为目标${target}是只读的`)
+    return true
+  },
+}
+export const shallowReadonlyHandler = {
+  get: shallowReadonlyGet,
   set: (target, key) => {
     console.warn(`key: ${key} 赋值失败，因为目标${target}是只读的`)
     return true
